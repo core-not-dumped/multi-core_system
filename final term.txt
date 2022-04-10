@@ -1,0 +1,149 @@
+1. Read-modify-write
+읽고 고치고 쓴다.
+
+
+2. race condition
+thread를 실행하는 순서에 따라 값이 달라진다.
+->atomic operation을 만든다.
+
+
+3. memory locking, atomic operation
+
+
+4. atomic : single step
+하나의 thread만 특정 메모리에 접근하도록 보장해준다.
+
+
+5. cas: compare and swap
+int atomicCAS(int* address, intexpected, intnewVal);
+oldVal= read (*address);
+(*address) = (oldVal== expected) ? newVal: oldVal
+return oldVal;
+
+__device__ inline void MyAtomicAdd(float *address, float value) {
+	intoldval, newval, readback;
+	oldval= __float_as_int(*address);
+	newval= __float_as_int(__int_as_float(oldval) + value);
+	while ((readback=atomicCAS((int*)address, oldval, newval))!= oldval) { 
+		oldval= readback;
+		newval= __float_as_int(__int_as_float(oldval) + value);
+	}
+}
+
+
+6. atomic add
+__global__ void kernel(int* pCount) {
+	__shared__ int nCountShared;
+	if (threadIdx.x== 0) {
+		nCountShared= 0;
+	}
+	__syncthreads();
+	atomicAdd(&nCountShared, 1);
+	__syncthreads();
+	if (threadIdx.x== 0) {
+		atomicAdd(pCount, nCountShared);
+	}
+}
+
+
+7. Histogram
+__global__ void kernel(unsigned int* hist, unsigned int* img, unsigned intsize) {
+	__shared__ inthistShared[NUMHIST];
+	if (threadIdx.x< NUMHIST) {
+		histShared[threadIdx.x] = 0;
+	}
+	__syncthreads();
+	
+	unsigned int i = blockIdx.x * blockDim.x + threadIdx.x;
+	unsigned intpixelVal= img[i];
+	atomicAdd(&(histShared[pixelVal]), 1);
+	__syncthreads();
+	
+	if (threadIdx.x< NUMHIST) {
+		atomicAdd(&(hist[threadIdx.x]), histShared[threadIdx.x]);
+	}
+}
+
+
+8. convolution: combine two functions or pieces of information to form a third fuction
+
+
+9. filter는 신호나 픽셀을 우리가 원하는 value로 바꿔준다.
+
+
+10. ghost elements를 넣어주지 않으면 크기가 계속 작아진다.
+
+
+11. mask는 constant memory에 올리기
+
+
+12. cache line size L1 -> 128B, L2 -> 32B
+
+
+13. spatial locality -> 인접한거 접근
+temporal locality -> 데이터 다시사용
+
+
+14. scratchpad memory -> 사용자가 직접 cache에 올려준다. 명시적으로 컨트롤해준다.
+
+
+15. 
+__constant__ float Mc[MASK_WIDTH][MASK_WIDTH];
+
+typedef struct{
+	unsigned intwidth;
+	unsigned intheight;
+	unsigned intpitch;
+	float* elements;
+} Matrix;
+
+Matrix  M;
+M = AllocateMatrix(MASK_WIDTH, MASK_WIDTH, 1);
+cudaMemcpyToSymbol(Mc, M.elements, MASK_WIDTH*MASK_WIDTH*sizeof(float));
+
+
+16. halo -> block이 옆 데이터도 필요함
+
+
+17. 1D convolution, shared memory에 값 복사하는 법
+int i= blockIdx.x * blockDim.x + threadIdx.x;
+__shared__ float  N_ds[TILE_SIZE + MAX_MASK_WIDTH -1];
+
+int n = Mask_Width/2;
+
+int halo_index_left= (blockIdx.x-1)*blockDim.x+ threadIdx.x;
+if (threadIdx.x>= blockDim.x-n) {
+	N_ds[threadIdx.x-(blockDim.x-n)] =(halo_index_left< 0) ? 0 : N[halo_index_left];
+}
+
+N_ds[n + threadIdx.x] = N[blockIdx.x*blockDim.x+ threadIdx.x];
+
+int halo_index_right= (blockIdx.x+ 1)*blockDim.x+ threadIdx.x;
+if (threadIdx.x< n) {
+	N_ds[n + blockDim.x+ threadIdx.x] =(halo_index_right>= Width) ? 0 : N[halo_index_right];
+}
+
+__syncthreads();
+
+-> 사실 명시적으로 loading할 필요가 없다. cache가 있기 때문에 사용가능성이 있다
+if statement가 성능을 저하시키기 때문에 안써도 된다.
+
+
+18. 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
